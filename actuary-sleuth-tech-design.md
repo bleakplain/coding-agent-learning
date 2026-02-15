@@ -137,168 +137,64 @@ Actuary Sleuth 是一个基于 SKILL.md 工作流编排规范的精算审核系�
 
 ---
 
-## 四、SKILL.md（工作流编排）
+## 四、工作流编排与配置（SKILL.md + skill.json）
 
-```markdown
+### 4.1 SKILL.md 结构
+
+SKILL.md 是工作流编排规范文件，定义了技能的工作流程、工具接口和执行声明。
+
+#### 4.1.1 基本元数据
+
+```yaml
 ---
 name: actuary-sleuth
-description: Use when reviewing insurance product clauses for compliance, checking against regulatory negative lists, calculating pricing reasonableness, or querying insurance regulations and laws. Use for 精算师日常评审工作 including 新产品条款审核、法规查询、负面清单检查、定价合理性计算和评审报告生成.
-metadata: { "openclaw": { "emoji": "📊", "requires": { "bins": ["python3"] }}}
+description: Use when reviewing insurance product clauses for compliance, checking against regulatory negative lists, calculating pricing reasonableness, or querying insurance regulations and laws.
+metadata:
+  openclaw:
+    emoji: "📊"
+    requires:
+      bins: ["python3"]
 ---
-
-# Actuary Sleuth - 精算审核助手
-
-## Overview
-
-面向精算师的专业产品评审辅助系统，帮助精算师更高效地评审保险产品条款。通过自动化检查和智能检索提升评审质量和效率，减少人工翻阅法规文件和负面清单的时间。
-
-**核心价值**：将3天的评审工作缩短至0.5天，自动化覆盖80%常规评审任务。
-
-## Tools
-
-### audit_document
-审核保险产品文档，返回完整的审核报告
-
-**执行脚本**: `scripts/audit.py`
-
-**Usage**:
-```bash
-python3 scripts/audit.py '{
-  "documentContent": "文档内容(Markdown格式)",
-  "documentUrl": "飞书文档链接(可选)",
-  "auditType": "full|negative-only|compliance-only"
-}'
 ```
 
-**Parameters**:
+#### 4.1.2 工具定义（Tools）
 
-| Param | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| documentContent | string | yes | - | 文档内容（Markdown格式） |
-| documentUrl | string | no | - | 飞书文档链接 |
-| auditType | string | no | full | 审核类型: full(完整), negative-only(仅负面清单), compliance-only(仅合规) |
+| 工具名 | 功能 | 执行脚本 |
+|--------|------|----------|
+| `audit_document` | 审核保险产品文档 | `scripts/audit.py` |
+| `query_regulation` | 查询保险法规 | `scripts/query.py` |
+| `check_negative_list` | 检查负面清单 | `scripts/check.py` |
 
-**Output**: 审核报告（JSON格式）
+**audit_document 工具**：
+- 输入：文档内容(Markdown)、文档URL、审核类型
+- 输出：审核报告(JSON)
+- 流程：预处理 → 负面清单检查 → 法规检索 → 报告生成
 
-**Workflow**:
-1. 调用 `scripts/preprocess.py` 处理文档
-2. 调用 `scripts/check.py` 检查负面清单
-3. 调用 `scripts/query.py` 检索相关法规
-4. 调用 `scripts/report.py` 生成报告
-5. 返回结果
+**query_regulation 工具**：
+- 输入：查询词、搜索类型
+- 输出：法规内容列表(JSON)
+- 支持精确查询、语义检索、混合搜索
 
-### query_regulation
-查询保险法规，支持条款编号精确查询和语义检索
+**check_negative_list 工具**：
+- 输入：产品条款数组
+- 输出：违规点列表(JSON)
+- 包含违规描述、严重程度、整改建议
 
-**执行脚本**: `scripts/query.py`
+#### 4.1.3 配置参数（Configuration）
 
-**Usage**:
-```bash
-python3 scripts/query.py '{
-  "query": "保险法第十六条",
-  "searchType": "exact|semantic|hybrid"
-}'
-```
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `scriptsPath` | Python 脚本路径 | ./scripts |
+| `dataPath` | 数据目录路径 | ./data |
+| `pythonEnv` | Python 环境 | python3 |
 
-**Parameters**:
+#### 4.1.4 依赖要求（Requirements）
 
-| Param | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| query | string | yes | - | 条款编号或关键词 |
-| searchType | string | no | hybrid | 搜索类型: exact(精确), semantic(语义), hybrid(混合) |
+- 网络权限：feishu
+- 文件权限：read, write
+- 依赖：python3, sqlite3, lancedb, ollama
 
-**Output**: 法规内容列表（JSON格式）
-
-### check_negative_list
-检查产品条款是否符合负面清单要求
-
-**执行脚本**: `scripts/check.py`
-
-**Usage**:
-```bash
-python3 scripts/check.py '{
-  "clauses": ["条款1内容", "条款2内容"]
-}'
-```
-
-**Parameters**:
-
-| Param | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| clauses | array[string] | yes | - | 产品条款内容数组 |
-
-**Output**: 违规点列表（JSON格式）
-
-## Configuration
-
-- `scriptsPath`: Python 脚本路径 (默认: ./scripts)
-- `dataPath`: 数据目录路径 (默认: ./data)
-- `pythonEnv`: Python 环境 (默认: python3)
-
-## Requirements
-
-- 网络权限: feishu
-- 文件权限: read, write
-- 依赖: python3, sqlite3, lancedb, ollama
-
-## Knowledge Base
-
-本技能内置完整的精算审核法规知识库：
-
-### 基础法规 (P0)
-- `01_保险法相关监管规定.md` - 保险法核心条款
-- `02_负面清单.md` - 22个违规点详细说明
-- `03_条款费率管理办法.md` - 费用率监管规定
-- `04_信息披露规则.md` - 信息披露要求
-
-### 产品开发规范 (P0)
-- `05_健康保险产品开发.md` - 健康险开发规范
-- `06_普通型人身保险.md` - 普通型产品规定
-- `07_分红型人身保险.md` - 分红型产品规定
-- `08_短期健康保险.md` - 短期健康险规定
-- `09_意外伤害保险.md` - 意外险规定
-- `10_互联网保险产品.md` - 互联网产品规范
-- `11_税优健康险.md` - 税优健康险规定
-- `12_万能型人身保险.md` - 万能险规定
-- `13_其他险种产品.md` - 其他险种规定
-- `14_综合监管规定.md` - 综合监管要求
-
-### 参考手册
-- `产品开发相关法律法规手册2025.12.md` - 完整法规手册（661KB）
-
-## When to Use
-
-**Use when:**
-- 审核新产品保险条款（需要检查负面清单、法规合规性）
-- 查询保险监管法规（保险法、条款费率管理办法等）
-- 检查产品是否违反负面清单（22个违规点）
-- 计算定价合理性（死亡率、利率、费用率对比行业标准）
-- 生成评审报告（Word/PDF格式）
-
-**NOT for:**
-- 最终合规决策（应以监管部门官方解释为准）
-- 复杂法律问题（需咨询专业法律意见）
-- 监管政策解读（仅供参考）
-
-## Quick Reference
-
-| 场景 | 输入 | 输出 | 优先级 |
-|------|------|------|--------|
-| 产品文档审核 | Word文档 | 结构化产品数据 + 违规检查结果 | P0 |
-| 负面清单检查 | 产品条款 | 22个违规点检查结果 + 整改建议 | P0 |
-| 法规快速查询 | 条款编号/关键词 | 完整条款内容 + 标准引用格式 | P0 |
-| 定价合理性计算 | 定价参数 | 偏差分析 + 合理性判断 | P0 |
-| 评审报告生成 | 审核结果 | Word/PDF格式报告 | P0 |
-| 智能检索 | 自然语言描述 | 相关法规条款 | P1 |
-
-## Current Status
-
-✅ 功能完整，已集成飞书 Channel
-```
-
----
-
-## 五、skill.json
+### 4.2 skill.json 配置
 
 ```json
 {
@@ -318,11 +214,44 @@ python3 scripts/check.py '{
 }
 ```
 
+### 4.3 知识库
+
+本技能内置完整的精算审核法规知识库：
+
+#### 基础法规（P0）
+- `01_保险法相关监管规定.md` - 保险法核心条款
+- `02_负面清单.md` - 22个违规点详细说明
+- `03_条款费率管理办法.md` - 费用率监管规定
+- `04_信息披露规则.md` - 信息披露要求
+
+#### 产品开发规范（P0）
+- `05_健康保险产品开发.md` - 健康险开发规范
+- `06_普通型人身保险.md` - 普通型产品规定
+- `07_分红型人身保险.md` - 分红型产品规定
+- `08_短期健康保险.md` - 短期健康险规定
+- `09_意外伤害保险.md` - 意外险规定
+- `10_互联网保险产品.md` - 互联网产品规范
+- `11_税优健康险.md` - 税优健康险规定
+- `12_万能型人身保险.md` - 万能险规定
+- `13_其他险种产品.md` - 其他险种规定
+- `14_综合监管规定.md` - 综合监管要求
+
+### 4.4 使用场景
+
+| 场景 | 输入 | 输出 | 优先级 |
+|------|------|------|--------|
+| 产品文档审核 | Word文档 | 结构化产品数据 + 违规检查结果 | P0 |
+| 负面清单检查 | 产品条款 | 22个违规点检查结果 + 整改建议 | P0 |
+| 法规快速查询 | 条款编号/关键词 | 完整条款内容 + 标准引用格式 | P0 |
+| 定价合理性计算 | 定价参数 | 偏差分析 + 合理性判断 | P0 |
+| 评审报告生成 | 审核结果 | Word/PDF格式报告 | P0 |
+| 智能检索 | 自然语言描述 | 相关法规条款 | P1 |
+
 ---
 
-## 六、Python 脚本实现
+## 五、Python 脚本实现
 
-### 6.1 统一接口模板
+### 5.1 统一接口模板
 
 ```python
 #!/usr/bin/env python3
@@ -373,7 +302,7 @@ if __name__ == '__main__':
     sys.exit(main())
 ```
 
-### 6.2 audit.py（审核引擎）
+### 5.2 audit.py（审核引擎）
 
 ```python
 #!/usr/bin/env python3
@@ -424,7 +353,7 @@ if __name__ == '__main__':
     main()
 ```
 
-### 6.3 query.py（法规查询）
+### 5.3 query.py（法规查询）
 
 ```python
 #!/usr/bin/env python3
@@ -483,7 +412,7 @@ if __name__ == '__main__':
     main()
 ```
 
-### 6.4 check.py（负面清单检查）
+### 5.4 check.py（负面清单检查）
 
 ```python
 #!/usr/bin/env python3
@@ -555,9 +484,9 @@ if __name__ == '__main__':
 
 ---
 
-## 七、Python 库模块
+## 六、Python 库模块
 
-### 7.1 lib/db.py（数据库操作）
+### 6.1 lib/db.py（数据库操作）
 
 ```python
 #!/usr/bin/env python3
@@ -641,7 +570,7 @@ def save_audit_record(record):
     conn.close()
 ```
 
-### 7.2 lib/lancedb.py（向量检索）
+### 6.2 lib/lancedb.py（向量检索）
 
 ```python
 #!/usr/bin/env python3
@@ -720,7 +649,7 @@ class VectorDB:
         cls._tables[table_name] = table
 ```
 
-### 7.3 lib/ollama.py（LLM 调用）
+### 6.3 lib/ollama.py（LLM 调用）
 
 ```python
 #!/usr/bin/env python3
@@ -814,7 +743,7 @@ def analyze_compliance(clause, regulations):
         }
 ```
 
-### 7.4 lib/feishu2md.py（文档转换）
+### 6.4 lib/feishu2md.py（文档转换）
 
 ```python
 #!/usr/bin/env python3
@@ -857,9 +786,9 @@ def convert_fallback(document_url):
 
 ---
 
-## 八、数据模型
+## 七、数据模型
 
-### 8.1 SQLite 表结构
+### 7.1 SQLite 表结构
 
 ```sql
 -- 法规库表
@@ -901,7 +830,7 @@ CREATE TABLE IF NOT EXISTS audit_history (
 );
 ```
 
-### 8.2 LanceDB 表结构
+### 7.2 LanceDB 表结构
 
 ```python
 # 法规向量表
@@ -916,9 +845,9 @@ regulations_vectors = {
 
 ---
 
-## 九、核心流程
+## 八、核心流程
 
-### 9.1 审核流程
+### 8.1 审核流程
 
 ```python
 def execute_audit(input_data):
@@ -953,7 +882,7 @@ def execute_audit(input_data):
     })
 ```
 
-### 9.2 查询流程
+### 8.2 查询流程
 
 ```python
 def search_regulation(query, search_type='hybrid'):
@@ -980,9 +909,9 @@ def search_regulation(query, search_type='hybrid'):
 
 ---
 
-## 十、初始化脚本
+## 九、初始化脚本
 
-### 10.1 scripts/init_db.py
+### 9.1 scripts/init_db.py
 
 ```python
 #!/usr/bin/env python3
@@ -1054,7 +983,7 @@ if __name__ == '__main__':
     init_database()
 ```
 
-### 10.2 scripts/import_regs.py
+### 9.2 scripts/import_regs.py
 
 ```python
 #!/usr/bin/env python3
@@ -1147,7 +1076,7 @@ if __name__ == '__main__':
     import_all_references()
 ```
 
-### 10.3 scripts/build_vectors.py
+### 9.3 scripts/build_vectors.py
 
 ```python
 #!/usr/bin/env python3
@@ -1223,9 +1152,9 @@ if __name__ == '__main__':
 
 ---
 
-## 十一、部署说明
+## 十、部署说明
 
-### 11.1 环境要求
+### 10.1 环境要求
 
 | 组件 | 版本要求 |
 |------|----------|
@@ -1233,7 +1162,7 @@ if __name__ == '__main__':
 | Ollama | 最新版 |
 | SQLite | 系统自带 |
 
-### 11.2 Python 依赖
+### 10.2 Python 依赖
 
 ```
 # scripts/requirements.txt
@@ -1244,7 +1173,7 @@ paddleocr>=2.7.0
 feishu2md>=0.1.0
 ```
 
-### 11.3 安装步骤
+### 10.3 安装步骤
 
 ```bash
 # 1. 进入 Skill 目录
@@ -1278,9 +1207,9 @@ openclaw skills reload
 
 ---
 
-## 十二、交互示例
+## 十一、交互示例
 
-### 12.1 审核交互
+### 11.1 审核交互
 
 ```
 用户: @actuary 审核 https://xxx.feishu.cn/doc/xxxxx
@@ -1318,7 +1247,7 @@ openclaw skills reload
 审核编号: AUD-20260215-001
 ```
 
-### 12.2 查询交互
+### 11.2 查询交互
 
 ```
 用户: @actuary 查询 保险法第十六条
@@ -1337,9 +1266,9 @@ openclaw skills reload
 
 ---
 
-## 十三、总结
+## 十二、总结
 
-### 13.1 核心特点
+### 12.1 核心特点
 
 1. **工作流编排与实现分离**: SKILL.md 定义工作流，Python 脚本实现功能
 2. **无胶水层**: SKILL.md 直接声明脚本，被解析后直接调用
@@ -1347,7 +1276,7 @@ openclaw skills reload
 4. **标准化接口**: 统一的 Python 脚本接口规范
 5. **可扩展性**: 易于添加新的审核规则和法规数据
 
-### 13.2 技术优势
+### 12.2 技术优势
 
 | 优势 | 说明 |
 |------|------|
@@ -1357,7 +1286,7 @@ openclaw skills reload
 | 灵活 | 支持混合检索（精确+语义） |
 | 本地化 | 数据不出内网，安全可控 |
 
-### 13.3 后续优化方向
+### 12.3 后续优化方向
 
 1. 增加更多审核规则和法规数据
 2. 优化定价分析算法
